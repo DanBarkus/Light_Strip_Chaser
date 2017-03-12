@@ -1,30 +1,28 @@
 #include <Adafruit_SSD1306.h>
 
-#include <Adafruit_NeoPixel.h>
 #include <Encoder.h>
 #include <SPI.h>
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+
+#include <OctoWS2811.h>
 //
-//#define OLED_RESET -1
-//Adafruit_SSD1306 display(OLED_RESET);
+//#define OLED_RESET 4
+//Adafruit_SSD1306 display(-1);
 
 #ifdef __AVR__
 #include <avr/power.h>
 #endif
 
-// Which pin on the Arduino is connected to the NeoPixels?
-#define PIN            10
-#define LB             7
-#define CB             9
-#define RB             8
+
+#define LB             3
+#define CB             17
+#define RB             1
 
 // How many NeoPixels are attached to the Arduino?
-#define NUMPIXELS      286
+const int ledsPerStrip = 286;
 
 
-Encoder myEnc(2, 3);
+Encoder myEnc(22, 23);
 
 const uint8_t gamma8[] = {
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
@@ -49,7 +47,7 @@ const uint8_t gamma8[] = {
 
 int pos = 50;
 int width = 30;
-int currBright = 150;
+float currBright = 150;
 int fade = 20;
 bool fDir = true;
 
@@ -61,13 +59,15 @@ bool cc = false;
 bool rc = false;
 
 
-// When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
-// Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
-// example for more information on possible values.
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+DMAMEM int displayMemory[ledsPerStrip * 6];
+int drawingMemory[ledsPerStrip * 6];
 
+const int config = WS2811_GRB | WS2811_800kHz;
+
+OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
 void setup() {
-  pixels.begin(); // This initializes the NeoPixel library.
+  leds.begin(); // This initializes the NeoPixel library.
+  leds.show();
   Serial.begin(9600);
 //  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 //  display.clearDisplay();
@@ -83,8 +83,22 @@ void setup() {
 void loop() {
 
 
-  if (digitalRead(LB) == HIGH && digitalRead(RB) == HIGH) {
-    if (!lc || !rc) {
+  if (digitalRead(LB) == LOW && digitalRead(RB) == LOW && digitalRead(CB) == LOW){
+    if (lc || cc || rc) {
+      myEnc.write(pos * 2);
+    }
+    long newPosition = (myEnc.read());
+    Serial.println(newPosition);
+    if (newPosition != pos || newPosition != 2 * pos) {
+      pos = newPosition / 2;
+      Serial.println(pos);
+    }
+    lc = false;
+    cc = false;
+    rc = false;
+  }
+  else if (digitalRead(LB) == HIGH && digitalRead(RB) == HIGH) {
+    if (lc || rc) {
       myEnc.write(fade * 2);
     }
     Serial.println("Both");
@@ -149,50 +163,39 @@ void loop() {
     cc = false;
     rc = true;
   }
-  else {
-    if (lc || cc || rc) {
-      myEnc.write(pos * 2);
-    }
-    long newPosition = (myEnc.read());
-    Serial.println(newPosition);
-    if (newPosition != pos || newPosition != 2 * pos) {
-      pos = newPosition / 2;
-      Serial.println(pos);
-    }
-    lc = false;
-    cc = false;
-    rc = false;
-  }
+  
 
 
-  for (int i = 0; i < NUMPIXELS; i++) {
+  for (int i = 0; i < ledsPerStrip; i++) {
     bright = 0;
     // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-    pixels.setPixelColor(i, pixels.Color(bright, bright, bright)); // Moderately bright green color.
+    leds.setPixel(i, bright, bright, bright); // Moderately bright green color.
 
   }
 
   for (int i = 0; i < width; i++) {
-    bright = gamma8[currBright];
+    bright = gamma8[(int)currBright];
     // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-    pixels.setPixelColor(pos + i, pixels.Color(bright, bright, bright)); // Moderately bright green color.
+    leds.setPixel(pos + i, bright, bright, bright); // Moderately bright green color.
 
   }
   //Generates the fade
   for (int i = 0; i < fade + 1; i++) {
 
     bright = (currBright / fade) * (fade - i);
-    //Serial.println(bright);
+    if (i == 1){
+      Serial.println(currBright / fade);
+    }
     //bright = pgm_read_byte(&gamma8[bright]);
     bright = gamma8[bright];
     //Serial.println(bright);
     // Back end of the fade
-    pixels.setPixelColor(pos - i, pixels.Color(bright, bright, bright));
+    leds.setPixel(pos - i, bright, bright, bright);
     // Leading end of the fade
-    pixels.setPixelColor(pos + width + i, pixels.Color(bright, bright, bright));
+    leds.setPixel(pos + width + i, bright, bright, bright);
   }
 
-  if (pos > NUMPIXELS - width - fade) {
+  if (pos > ledsPerStrip - width - fade) {
     fDir = false;
   }
   else if (pos < fade) {
@@ -208,7 +211,7 @@ void loop() {
     }
   }
 
-  pixels.show(); // This sends the updated pixel color to the hardware.
+  leds.show(); // This sends the updated pixel color to the hardware.
   
 //  display.clearDisplay();
 //  display.setCursor(0,0);
@@ -220,5 +223,4 @@ void loop() {
   //delay(20);
 
 }
-
 
