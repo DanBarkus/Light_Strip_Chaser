@@ -50,7 +50,7 @@ int width = 30;
 float currBright = 150;
 int fade = 20;
 bool fDir = true;
-bool AUTO = true;
+bool AUTO = false;
 bool RUNNING = false;
 bool STIME = false;
 
@@ -61,7 +61,9 @@ int dur = 0;
 int sTime = 0;
 int eTime = 0;
 
-int oThresh = 500;
+int last = 0;
+
+int oThresh = 50;
 int thresh = oThresh;
 
 bool moving = false;
@@ -104,10 +106,13 @@ void loop() {
       if (stage == 0) {
         Serial.println("Choose Start Position");
         sPos = readEnc(sPos, 1);
+        width = 2;
+        fade = 0;
+        pos = sPos;
       }
       else if (stage == 1) {
         Serial.println("Choose End Position");
-        sPos = readEnc(ePos, 1);
+        ePos = readEnc(ePos, 1);
       }
       else if (stage == 2) {
         Serial.println("Choose Width");
@@ -127,7 +132,7 @@ void loop() {
       else if (stage == 5) {
         sPos = sPos - (fade + width / 2);
         ePos = ePos + (fade + width / 2);
-        Serial.println("Choose Timespan (S)");
+        Serial.println("Choose Timespan (Seconds)");
         pos = (sPos + (ePos - sPos) / 2) - (width / 2);
         dur = readEnc(dur, 4);
         width = dur / 10;
@@ -161,7 +166,7 @@ void loop() {
         stage = 0;
         RUNNING = false;
       }
-      stage = checkClick(stage);
+      stage = stage + checkClick();
 
 
     }
@@ -182,94 +187,50 @@ void loop() {
       RUNNING = true;
     }
   }
-  //  else {
-  //    if (lc || cc || rc) {
-  //      myEnc.write(pos * 2);
-  //    }
-  //  }
 
-  // Display loop
-  //  if (lc || cc || rc) {
-  //    myEnc.write(pos * 2);
-  //  }
-  //  long newPosition = (myEnc.read());
-  //  Serial.println(newPosition);
-  //  if (newPosition != pos || newPosition != 2 * pos) {
-  //    pos = newPosition / 2;
-  //    Serial.println(pos);
-  //  }
-  //  lc = false;
-  //  cc = false;
-  //  rc = false;
-  //  else if (digitalRead(LB) == HIGH && digitalRead(RB) == HIGH) {
-  //    if (lc || rc) {
-  //      myEnc.write(fade * 2);
-  //    }
-  //    Serial.println("Both");
-  //    long newFade = (myEnc.read());
-  //    Serial.println(newFade);
-  //    if (newFade != fade) {
-  //      if (newFade < 0) {
-  //        newFade = 0;
-  //      }
-  //      fade = newFade / 2;
-  //      Serial.println(fade);
-  //    }
-  //    lc = false;
-  //    rc = false;
-  //  }
-  //  else if (digitalRead(LB) == HIGH) {
-  //    if (!lc) {
-  //      myEnc.write(width * 2);
-  //    }
-  //    Serial.println("Left");
-  //    long newWidth = (myEnc.read());
-  //    Serial.println(newWidth);
-  //    if (newWidth != width || newWidth != 2 * width) {
-  //      if (newWidth < 4) {
-  //        newWidth = 4;
-  //      }
-  //      width = newWidth / 2;
-  //      Serial.println(width);
-  //    }
-  //    lc = true;
-  //    cc = false;
-  //    rc = false;
-  //  }
-  //  else if (digitalRead(CB) == HIGH) {
-  //    Serial.println("Center");
-  //    pos = 50;
-  //    width = 10;
-  //    fade  = 20;
-  //    currBright = 155;
-  //    lc = true;
-  //    cc = true;
-  //    rc = true;
-  //  }
-  //  else if (digitalRead(RB) == HIGH) {
-  //    if (!rc) {
-  //      myEnc.write(currBright);
-  //    }
-  //    Serial.println("Right");
-  //    long newBright = (myEnc.read());
-  //    Serial.println(newBright);
-  //    if (newBright != currBright) {
-  //      if (newBright < 0) {
-  //        newBright = 0;
-  //      }
-  //      else if (newBright > 255) {
-  //        newBright = 255;
-  //      }
-  //      currBright = newBright;
-  //      Serial.println(currBright);
-  //    }
-  //    lc = false;
-  //    cc = false;
-  //    rc = true;
-  //  }
-
-
-
+  else {
+    int btn = checkClick();
+    if (btn == 0) {
+      pos = readEnc(pos, 2);
+      if (pos < 0 - (width + fade)) {
+        pos = 0 - (width + fade);
+      }
+      else if (pos > ledsPerStrip + fade) {
+        pos = ledsPerStrip + fade;
+      }
+    }
+    else if (btn == 1) {
+      currBright = readEnc(currBright, 2);
+      if (currBright < 0) {
+        currBright = 1;
+      }
+      else if (currBright > 255) {
+        currBright = 255;
+      }
+    }
+    else if (btn == 2) {
+      fade = readEnc(fade, 2);
+      if (fade <= 0) {
+        fade = 0;
+      }
+    }
+    else if (btn == -1) {
+      //Serial.println("Left");
+      width = readEnc(width, 2);
+      if (width < 1) {
+        width = 2;
+      }
+    }
+    else if (btn == -2) {
+      pos = 50;
+      width = 10;
+      fade  = 20;
+      currBright = 155;
+    }
+  }
+  //-------------------------------
+  // Actually does the lights stuff
+  //-------------------------------
   for (int i = 0; i < ledsPerStrip; i++) {
     bright = 0;
     // clear all pixels by setting to black
@@ -298,22 +259,6 @@ void loop() {
     leds.setPixel(pos + width + i, bright, bright, bright);
   }
 
-  if (pos > ledsPerStrip - width - fade) {
-    fDir = false;
-  }
-  else if (pos < fade) {
-    fDir = true;
-  }
-
-  if (moving) {
-    if (fDir) {
-      pos++;
-    }
-    else {
-      pos--;
-    }
-  }
-
   leds.show(); // This sends the updated pixel color to the hardware.
 
   //  display.clearDisplay();
@@ -328,56 +273,74 @@ void loop() {
 }
 
 int readEnc (int input, int mult) {
-  mult = 4 / mult;
-  myEnc.write(input * mult);
+  int nMult = 4 / mult;
+  if (input != last) {
+    myEnc.write(input * nMult);
+  }
   long newInput = (myEnc.read());
-  if (newInput != input ) {
-    input = newInput / mult;
+  if (newInput != input) {
+    input = newInput / nMult;
+    last = newInput / nMult;
+    Serial.println(newInput);
     Serial.println(input);
   }
   return input;
 }
 
-int checkClick (int stage) {
-  thresh--;
-  if (thresh == 0) {
-    //  if (digitalRead(LB) == HIGH) {
-    //    if (!lc) {
-    //      Serial.println("Left");
-    //      stage--;
-    //      return stage;
-    //    }
-    //    lc = true;
-    //    cc = false;
-    //    rc = false;
-    //  }
-    if (digitalRead(RB) == HIGH) {
-      if (!rc) {
-        Serial.println("Right");
-        stage++;
-        return stage;
-      }
-      lc = false;
-      cc = false;
-      rc = true;
+int checkClick () {
+  if (digitalRead(LB) == LOW && digitalRead(RB) == LOW && digitalRead(CB) == LOW) {
+    if (lc || cc || rc) {
+      return 0;
     }
-    else {
-      lc = false;
-      cc = false;
-      rc = false;
-    }
-    thresh = oThresh;
-      //if (digitalRead(LB) == LOW && digitalRead(RB) == LOW && digitalRead(CB) == LOW)
-      //    else if (digitalRead(CB) == HIGH) {
-      //      Serial.println("Center");
-      //      pos = 50;
-      //      width = 10;
-      //      fade  = 20;
-      //      currBright = 155;
-      //      lc = true;
-      //      cc = true;
-      //      rc = true;
-      //    }
+    lc = false;
+    cc = false;
+    rc = false;
   }
+  else if (digitalRead(LB) == HIGH && digitalRead(RB) == HIGH) {
+    if (!lc || !rc) {
+      Serial.println("Both");
+      return 2;
+    }
+    lc = true;
+    rc = true;
+  }
+  else if (digitalRead(LB) == HIGH) {
+    if (!lc) {
+      Serial.println("Left");
+      return -1;
+    }
+    lc = true;
+    cc = false;
+    rc = false;
+  }
+  else if (digitalRead(RB) == HIGH) {
+    if (!rc) {
+      Serial.println("Right");
+      return 1;
+    }
+    lc = false;
+    cc = false;
+    rc = true;
+  }
+  else if (digitalRead(CB) == HIGH) {
+    if (!cc) {
+      Serial.println("Center");
+      return -2;
+    }
+    lc = false;
+    cc = true;
+    rc = false;
+  }
+  //if (digitalRead(LB) == LOW && digitalRead(RB) == LOW && digitalRead(CB) == LOW)
+  //    else if (digitalRead(CB) == HIGH) {
+  //      Serial.println("Center");
+  //      pos = 50;
+  //      width = 10;
+  //      fade  = 20;
+  //      currBright = 155;
+  //      lc = true;
+  //      cc = true;
+  //      rc = true;
+  //    }
 }
 
